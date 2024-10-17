@@ -1,53 +1,59 @@
 # -*- coding:utf-8 -*-　
 # Last modify: Liu Wentao
-# Description: Skeleton for fine-tuning with HF dataset
-# Note: Tested with T5-small
-
+# Description: Skeleton for fine-tuning with SemEval data on track A
+# Note:
 import argparse
 import os
+import pandas as pd
+import datasets
 
 from datasets import load_dataset
 from transformers import AutoModelForSeq2SeqLM, AutoTokenizer, Seq2SeqTrainer, Seq2SeqTrainingArguments, \
-    DataCollatorWithPadding
+    DataCollatorWithPadding, DataCollatorForSeq2Seq
 
 
 def main(args):
-    print(f"Executing fine-tuning on {args.model_name}")
-    model = AutoModelForSeq2SeqLM.from_pretrained(args.model_name)
-    tokenizer = AutoTokenizer.from_pretrained(args.model_name)
+    model_name = args.model_name
+    data_path = args.data_set
 
-    # TODO: Transfer to dataset by SemEVAL2025
-    dataset = load_dataset(args.data_set)
-    train_dataset = dataset['train']
-    val_dataset = dataset['validation']
-    print(train_dataset.features)
+    # Load pretrained model and tokenizer
+    model = AutoModelForSeq2SeqLM.from_pretrained(model_name)
+    tokenizer = AutoTokenizer.from_pretrained(model_name)
 
-    id2label = {idx: label for idx, label in enumerate(train_dataset.features["label"].names)}
-    label2id = {label: idx for idx, label in id2label.items()}
+    data_df = pd.read_csv(data_path)
+    data_head = data_df.head(5)
 
-    def preprocess_function(example):
+    def row_process(row):
+        text = row['text']
+        labels = (f"{row['Anger']} Anger, {row['Fear']} Fear, {row['Joy']} Joy, "
+                  f"{row['Sadness']} Sadness, {row['Surprise']} Surprise")
+
+        return {'text': text, 'labels': labels}
+
+    formatted_data = data_df.apply(row_process, axis=1).tolist()
+
+    # Construct sets
+    dataset = datasets.Dataset.from_pandas(pd.DataFrame(formatted_data))
+    dataset = dataset.train_test_split(test_size=0.1)
+    train_set = dataset['train']
+    test_set = dataset['test']
+
+    def preprocess(example):
         inputs = "Classify the emotion: " + example['text']
-        model_inputs = tokenizer(inputs, max_length=128, truncation=True)
+        model_inputs = tokenizer(inputs, max_length=128, padding="max_length", truncation=True)
 
-        labels = id2label[example['label']]
         with tokenizer.as_target_tokenizer():
-            labels = tokenizer(labels, max_length=32, truncation=True)
+            labels = tokenizer(example['labels'], max_length=32, padding="max_length", truncation=True)
 
         model_inputs['labels'] = labels["input_ids"]
         return model_inputs
 
-    train_dataset = train_dataset.map(preprocess_function)
-    val_dataset = val_dataset.map(preprocess_function)
+    train_set = train_set.map(preprocess).remove_columns("text")
+    test_set = test_set.map(preprocess).remove_columns("text")
 
-    train_dataset = train_dataset.remove_columns("text").remove_columns("label")
-    val_dataset = val_dataset.remove_columns("text").remove_columns("label")
+    # print(train_set[0])
+    # print(test_set[0])
 
-    print(train_dataset[0])
-    print(val_dataset[0])
-
-    # return
-
-    # Define training arguments
     training_args = Seq2SeqTrainingArguments(
         output_dir="./results",
         evaluation_strategy="epoch",
@@ -66,18 +72,13 @@ def main(args):
     trainer = Seq2SeqTrainer(
         model=model,
         args=training_args,
-        train_dataset=train_dataset,
-        eval_dataset=val_dataset,
+        train_dataset=train_set,
+        eval_dataset=test_set,
         # data_collator=data_collator,
         tokenizer=tokenizer,
     )
 
     trainer.train()
-
-    # TODO: Construct evaluate pipeline
-    # Evaluate the model on the validation set
-    # results = trainer.evaluate()
-    # print(f"Validation Loss: {results['eval_loss']}")
 
     if args.skip_save:
         print("Skipping saving model")
@@ -97,7 +98,7 @@ if __name__ == '__main__':
         '-m',
         type=str,
         required=False,
-        default='google-t5/t5-small',
+        default='./home/checkpoints_hf/T5-small-hf',
         help='Path or name to pre-trained model',
     )
 
@@ -106,7 +107,7 @@ if __name__ == '__main__':
         '-d',
         type=str,
         required=False,
-        default='emotion',
+        default='./home/data/public_data/train/track_a/eng.csv',
         help='Path to fine-tune dataset',
     )
 
