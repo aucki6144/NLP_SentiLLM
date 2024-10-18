@@ -1,4 +1,3 @@
-
 # -*- coding:utf-8 -*-　
 # Last modify: CHENG Kit Shun
 # Description: Skeleton for Evaluation
@@ -11,6 +10,8 @@ import pandas as pd
 from transformers import AutoModelForSeq2SeqLM, AutoTokenizer, TextClassificationPipeline
 import torch
 from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score
+from torch.utils.data import DataLoader
+
 def evalution(args):
 
     model = AutoModelForSeq2SeqLM.from_pretrained(args.model_path)
@@ -29,13 +30,14 @@ def evalution(args):
     formatted_data = data_df.apply(row_process, axis=1).tolist()
     test_set = datasets.Dataset.from_pandas(pd.DataFrame(formatted_data))
     #test_set = test_set.select(range(0,50))
+    data_loader = DataLoader(test_set, batch_size=200, shuffle=False, drop_last = False)
 
     #function to make prediction
     def predict(input_text, model, tokenizer):
-        inputs = "Classify the emotion: " + input_text
+        inputs = ["Classify the emotion: " + text for text in input_text]
         model_inputs = tokenizer(inputs, max_length=128, padding="max_length", truncation=True, return_tensors="pt")
         outputs = model.generate(**model_inputs, max_new_tokens=100)
-        predicted_labels = tokenizer.decode(outputs[0], skip_special_tokens=True)
+        predicted_labels = [tokenizer.decode(ids, skip_special_tokens=True) for ids in outputs.tolist()]
         print(predicted_labels)
         return predicted_labels
     
@@ -52,10 +54,11 @@ def evalution(args):
 
     #making prediction df
     predict_df = pd.DataFrame(columns=['Anger', 'Fear', 'Joy', 'Sadness', 'Surprise'])
-    for index, text in enumerate(test_set["text"]):
-        label = predict(text, model, tokenizer)
-        emotion_data = convert_labeltext2df(label)
-        predict_df = predict_df._append(emotion_data, ignore_index=True)
+    for batch in data_loader:
+        labels = predict(batch["text"], model, tokenizer)
+        for label in labels:
+            emotion_data = convert_labeltext2df(label)
+            predict_df = predict_df._append(emotion_data, ignore_index=True)
 
     #making true labels df
     true_df = pd.DataFrame(columns=['Anger', 'Fear', 'Joy', 'Sadness', 'Surprise'])
