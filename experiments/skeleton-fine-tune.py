@@ -1,14 +1,9 @@
-# -*- coding:utf-8 -*-　
-# Last modify: Liu Wentao
-# Description: Skeleton for fine-tuning with HF dataset
-# Note: Tested with T5-small
-
 import argparse
 import os
 
 from datasets import load_dataset
 from transformers import AutoModelForSeq2SeqLM, AutoTokenizer, Seq2SeqTrainer, Seq2SeqTrainingArguments, \
-    DataCollatorWithPadding
+    DataCollatorWithPadding, DataCollatorForSeq2Seq
 
 
 def main(args):
@@ -44,8 +39,6 @@ def main(args):
 
     print(train_dataset[0])
     print(val_dataset[0])
-
-    # return
 
     # Define training arguments
     training_args = Seq2SeqTrainingArguments(
@@ -87,6 +80,8 @@ def main(args):
         os.makedirs(save_dir, exist_ok=True)
         model.save_pretrained(save_dir)
         tokenizer.save_pretrained(save_dir)
+
+
 
 
 if __name__ == '__main__':

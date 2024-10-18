@@ -1,8 +1,3 @@
-# -*- coding:utf-8 -*-　
-# Last modify: Liu Wentao
-# Description: Skeleton for Evaluation
-# Note: WIP
-
 import argparse
 import transformers
 
