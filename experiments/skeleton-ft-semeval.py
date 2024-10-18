@@ -3,30 +3,54 @@
 # Description: Skeleton for fine-tuning with SemEval data on track A
 # Note:
 import argparse
-import os
 import pandas as pd
 import datasets
+import torch
 
 from datasets import load_dataset
-from transformers import AutoModelForSeq2SeqLM, AutoTokenizer, Seq2SeqTrainer, Seq2SeqTrainingArguments, \
-    DataCollatorWithPadding, DataCollatorForSeq2Seq
+from transformers import AutoModelForCausalLM, AutoTokenizer, Seq2SeqTrainer, Seq2SeqTrainingArguments, \
+    DataCollatorWithPadding, DataCollatorForSeq2Seq, AutoModelForSeq2SeqLM
+import sys
+import os
+
+# This line is for adding packages in the root dir into syspath
+sys.path.append(os.path.split(sys.path[0])[0])
+
+from utils.prompt_helper import get_prompt_template
 
 
 def main(args):
     model_name = args.model_name
     data_path = args.data_set
+    torch.manual_seed(args.seed)
 
     # Load pretrained model and tokenizer
-    model = AutoModelForSeq2SeqLM.from_pretrained(model_name)
-    tokenizer = AutoTokenizer.from_pretrained(model_name)
+    if "Llama" in model_name:
+        model = AutoModelForCausalLM.from_pretrained(model_name)
+        tokenizer = AutoTokenizer.from_pretrained(model_name)
+        tokenizer.add_special_tokens({'pad_token': '[PAD]'})
+    elif "T5" in model_name:
+        model = AutoModelForSeq2SeqLM.from_pretrained(model_name)
+        tokenizer = AutoTokenizer.from_pretrained(model_name)
+    else:
+        print("Unsupported model")
+        return
 
     data_df = pd.read_csv(data_path)
-    data_head = data_df.head(5)
+
+    yes_no_dict = {
+        1: 'Yes',
+        0: 'No'
+    }
 
     def row_process(row):
         text = row['text']
-        labels = (f"{row['Anger']} Anger, {row['Fear']} Fear, {row['Joy']} Joy, "
-                  f"{row['Sadness']} Sadness, {row['Surprise']} Surprise")
+        labels = (f"Angry: {yes_no_dict[row['Anger']]}, "
+                  f"Fear: {yes_no_dict[row['Fear']]}, "
+                  f"Joy: {yes_no_dict[row['Joy']]}, "
+                  f"Sadness: {yes_no_dict[row['Sadness']]}, "
+                  f"Surprise:{yes_no_dict[row['Surprise']]}")
+        # print(labels)
 
         return {'text': text, 'labels': labels}
 
@@ -38,8 +62,12 @@ def main(args):
     train_set = dataset['train']
     test_set = dataset['test']
 
+    prompt_template = get_prompt_template()
+
     def preprocess(example):
-        inputs = "Classify the emotion: " + example['text']
+        inputs = prompt_template.safe_substitute({'sentence': example['text']})
+        # print(inputs)
+
         model_inputs = tokenizer(inputs, max_length=128, padding="max_length", truncation=True)
 
         with tokenizer.as_target_tokenizer():
@@ -58,11 +86,11 @@ def main(args):
         output_dir="./results",
         evaluation_strategy="epoch",
         learning_rate=5e-5,
-        per_device_train_batch_size=2,  # Due to limited resources
-        per_device_eval_batch_size=2,
+        per_device_train_batch_size=1,  # Due to limited resources
+        per_device_eval_batch_size=1,
         weight_decay=0.01,
         save_strategy="no",
-        num_train_epochs=1,
+        num_train_epochs=2,
         fp16=True,  # Enable mixed precision if using GPU
     )
 
@@ -74,7 +102,7 @@ def main(args):
         args=training_args,
         train_dataset=train_set,
         eval_dataset=test_set,
-        # data_collator=data_collator,
+        data_collator=data_collator,
         tokenizer=tokenizer,
     )
 
@@ -85,7 +113,7 @@ def main(args):
         return
     else:
         save_dir = os.path.join(args.save_dir, args.model_name.split("/")[-1])
-        os.makedirs(save_dir, exist_ok=True)
+        print(f"Saving model to {save_dir}")
         model.save_pretrained(save_dir)
         tokenizer.save_pretrained(save_dir)
 
@@ -116,7 +144,7 @@ if __name__ == '__main__':
         '-sd',
         type=str,
         required=False,
-        default='./home/checkpoints',
+        default='./home/output',
         help='Directory to save fine-tuned checkpoints',
     )
 
@@ -125,8 +153,27 @@ if __name__ == '__main__':
         '-skip',
         type=bool,
         required=False,
-        default=True,
+        default=False,
         help='Skip fine-tuning on saved checkpoints',
+    )
+
+    parser.add_argument(
+        '--batch_size',
+        '-b',
+        type=int,
+        required=False,
+        default=4,
+        help='Batch size for training',
+    )
+
+    # Torch.manual_seed(3407) is all you need
+    parser.add_argument(
+        '--seed',
+        '-s',
+        type=int,
+        required=False,
+        default=3407,
+        help='Random seed for reproducibility',
     )
 
     config_args = parser.parse_args()

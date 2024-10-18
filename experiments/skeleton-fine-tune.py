@@ -11,7 +11,6 @@ def main(args):
     model = AutoModelForSeq2SeqLM.from_pretrained(args.model_name)
     tokenizer = AutoTokenizer.from_pretrained(args.model_name)
 
-    # TODO: Transfer to dataset by SemEVAL2025
     dataset = load_dataset(args.data_set)
     train_dataset = dataset['train']
     val_dataset = dataset['validation']
@@ -61,27 +60,21 @@ def main(args):
         args=training_args,
         train_dataset=train_dataset,
         eval_dataset=val_dataset,
-        # data_collator=data_collator,
+        data_collator=data_collator,
         tokenizer=tokenizer,
     )
 
     trainer.train()
-
-    # TODO: Construct evaluate pipeline
-    # Evaluate the model on the validation set
-    # results = trainer.evaluate()
-    # print(f"Validation Loss: {results['eval_loss']}")
 
     if args.skip_save:
         print("Skipping saving model")
         return
     else:
         save_dir = os.path.join(args.save_dir, args.model_name.split("/")[-1])
+        print(f"Saving model to {save_dir}")
         os.makedirs(save_dir, exist_ok=True)
         model.save_pretrained(save_dir)
         tokenizer.save_pretrained(save_dir)
-
-
 
 
 if __name__ == '__main__':
@@ -110,7 +103,7 @@ if __name__ == '__main__':
         '-sd',
         type=str,
         required=False,
-        default='./home/checkpoints',
+        default='./home/output',
         help='Directory to save fine-tuned checkpoints',
     )
 
@@ -121,6 +114,15 @@ if __name__ == '__main__':
         required=False,
         default=True,
         help='Skip fine-tuning on saved checkpoints',
+    )
+
+    parser.add_argument(
+        '--seed',
+        '-s',
+        type=int,
+        required=False,
+        default=3407,
+        help='Random seed for reproducibility',
     )
 
     config_args = parser.parse_args()
