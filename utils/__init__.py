@@ -3,4 +3,4 @@
 # Description:
 # Note:
 
-from .prompt_helper import get_prompt_template, generate_prompt
+from .prompt_helper import get_prompt_label_template

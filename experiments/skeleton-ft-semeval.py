@@ -16,7 +16,7 @@ import os
 # This line is for adding packages in the root dir into syspath
 sys.path.append(os.path.split(sys.path[0])[0])
 
-from utils.prompt_helper import get_prompt_template
+from utils.prompt_helper import get_prompt_label_template
 
 
 def main(args):
@@ -26,10 +26,13 @@ def main(args):
 
     # Load pretrained model and tokenizer
     if "Llama" in model_name:
+        print("Using Llama config")
         model = AutoModelForCausalLM.from_pretrained(model_name)
         tokenizer = AutoTokenizer.from_pretrained(model_name)
         tokenizer.add_special_tokens({'pad_token': '[PAD]'})
+        model.resize_token_embeddings(len(tokenizer))
     elif "T5" in model_name:
+        print("Using T5 config")
         model = AutoModelForSeq2SeqLM.from_pretrained(model_name)
         tokenizer = AutoTokenizer.from_pretrained(model_name)
     else:
@@ -43,14 +46,19 @@ def main(args):
         0: 'No'
     }
 
+    prompt_template, label_template = get_prompt_label_template(args.prompt_index)
+
+    # Compose prompts here
     def row_process(row):
-        text = row['text']
-        labels = (f"Angry: {yes_no_dict[row['Anger']]}, "
-                  f"Fear: {yes_no_dict[row['Fear']]}, "
-                  f"Joy: {yes_no_dict[row['Joy']]}, "
-                  f"Sadness: {yes_no_dict[row['Sadness']]}, "
-                  f"Surprise:{yes_no_dict[row['Surprise']]}")
-        # print(labels)
+        raw_text = row['text']
+        text = prompt_template.safe_substitute({'sentence': raw_text})
+        labels = label_template.safe_substitute({
+            'Anger': row['Anger'],
+            'Fear': row['Fear'],
+            'Joy': row['Joy'],
+            'Sadness': row['Sadness'],
+            'Surprise': row['Surprise'],
+        })
 
         return {'text': text, 'labels': labels}
 
@@ -62,16 +70,12 @@ def main(args):
     train_set = dataset['train']
     test_set = dataset['test']
 
-    prompt_template = get_prompt_template()
-
+    # TODO: Check why batch size error for Llama-3.2-1B
     def preprocess(example):
         inputs = prompt_template.safe_substitute({'sentence': example['text']})
-        # print(inputs)
 
-        model_inputs = tokenizer(inputs, max_length=128, padding="max_length", truncation=True)
-
-        with tokenizer.as_target_tokenizer():
-            labels = tokenizer(example['labels'], max_length=32, padding="max_length", truncation=True)
+        model_inputs = tokenizer(inputs, padding="max_length", max_length=256, truncation=True)
+        labels = tokenizer(example['labels'], padding="max_length", max_length=256, truncation=True)
 
         model_inputs['labels'] = labels["input_ids"]
         return model_inputs
@@ -79,15 +83,12 @@ def main(args):
     train_set = train_set.map(preprocess).remove_columns("text")
     test_set = test_set.map(preprocess).remove_columns("text")
 
-    # print(train_set[0])
-    # print(test_set[0])
-
     training_args = Seq2SeqTrainingArguments(
         output_dir="./results",
         evaluation_strategy="epoch",
         learning_rate=5e-5,
-        per_device_train_batch_size=1,  # Due to limited resources
-        per_device_eval_batch_size=1,
+        per_device_train_batch_size=2,  # Due to limited resources
+        per_device_eval_batch_size=2,
         weight_decay=0.01,
         save_strategy="no",
         num_train_epochs=2,
@@ -174,6 +175,15 @@ if __name__ == '__main__':
         required=False,
         default=3407,
         help='Random seed for reproducibility',
+    )
+
+    parser.add_argument(
+        '--prompt_index',
+        '-ind',
+        type=int,
+        required=False,
+        default=0,
+        help='Index for prompt-label template pair',
     )
 
     config_args = parser.parse_args()
