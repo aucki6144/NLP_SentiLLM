@@ -31,7 +31,21 @@ def main(args):
         tokenizer = AutoTokenizer.from_pretrained(model_name)
         tokenizer.add_special_tokens({'pad_token': '[PAD]'})
         model.resize_token_embeddings(len(tokenizer))
-    elif "T5" in model_name:
+
+        layer_num = 0
+        for i, layer in enumerate(model.model.layers):
+            print(f"{i} = {layer}")
+            layer_num += 1
+
+        for i, layer in enumerate(model.model.layers):
+            if i < args.freeze_layer:
+                for param in layer.parameters():
+                    param.requires_grad = False
+
+        print(
+            f"Froze the first {args.freeze_layer} layers, only the last {layer_num - args.freeze_layer} layers will be fine-tuned.")
+
+    elif "T5" in model_name or "t5" in model_name:
         print("Using T5 config")
         model = AutoModelForSeq2SeqLM.from_pretrained(model_name)
         tokenizer = AutoTokenizer.from_pretrained(model_name)
@@ -52,15 +66,20 @@ def main(args):
     def row_process(row):
         raw_text = row['text']
         text = prompt_template.safe_substitute({'sentence': raw_text})
-        labels = label_template.safe_substitute({
-            'Anger': row['Anger'],
-            'Fear': row['Fear'],
-            'Joy': row['Joy'],
-            'Sadness': row['Sadness'],
-            'Surprise': row['Surprise'],
-        })
+        labels = []
+        if row['Anger'] == 1:
+            labels.append('Anger')
+        if row['Fear'] == 1:
+            labels.append('Fear')
+        if row['Joy'] == 1:
+            labels.append('Joy')
+        if row['Sadness'] == 1:
+            labels.append('Sadness')
+        if row['Surprise'] == 1:
+            labels.append('Surprise')
 
-        return {'text': text, 'labels': labels}
+        label_str = ", ".join(labels)
+        return {'text': text, 'labels': label_str}
 
     formatted_data = data_df.apply(row_process, axis=1).tolist()
 
@@ -127,7 +146,7 @@ if __name__ == '__main__':
         '-m',
         type=str,
         required=False,
-        default='./home/checkpoints_hf/T5-small-hf',
+        default='./home/checkpoints_hf/Llama-3.2-1B-hf',
         help='Path or name to pre-trained model',
     )
 
@@ -184,6 +203,15 @@ if __name__ == '__main__':
         required=False,
         default=0,
         help='Index for prompt-label template pair',
+    )
+
+    parser.add_argument(
+        '--freeze_layer',
+        '-f',
+        type=int,
+        required=False,
+        default=0,
+        help='Freeze the first n layers',
     )
 
     config_args = parser.parse_args()
