@@ -39,12 +39,12 @@ def get_model_train(model_name, freeze_layer = 0):
             layer_num += 1
 
         for i, layer in enumerate(model.model.layers):
-            if i < args.freeze_layer:
+            if i < freeze_layer:
                 for param in layer.parameters():
                     param.requires_grad = False
 
         print(
-            f"Froze the first {args.freeze_layer} layers, only the last {layer_num - freeze_layer} layers will be fine-tuned.")
+            f"Froze the first {freeze_layer} layers, only the last {layer_num - freeze_layer} layers will be fine-tuned.")
 
     elif "T5" in model_name or "t5" in model_name:
         print("Using T5 config")
