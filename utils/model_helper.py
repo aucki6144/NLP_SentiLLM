@@ -2,7 +2,7 @@
 # Last modify: Liu Wentao
 # Description: Skeleton for fine-tuning with SemEval data on track A
 # Note:
-from transformers import AutoModelForCausalLM, AutoTokenizer, AutoModelForSeq2SeqLM
+from transformers import AutoModelForCausalLM, AutoTokenizer, AutoModelForSeq2SeqLM, AutoModelForQuestionAnswering
 
 
 def get_model(model_name):
