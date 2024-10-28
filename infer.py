@@ -5,7 +5,7 @@ import torch
 from datasets import Dataset
 from transformers import AutoModelForCausalLM, AutoTokenizer, AutoModelForSeq2SeqLM
 
-from utils.prompt_helper import get_prompt_label_template
+from utils import get_model, get_prompt_label_template
 
 
 def infer(args):
@@ -13,25 +13,7 @@ def infer(args):
     data_path = args.data_set
     torch.manual_seed(args.seed)
 
-    # Load the trained model and tokenizer
-    print("Loading the trained model...")
-    if "Llama" in model_name:
-        print("Using Llama config")
-        model = AutoModelForCausalLM.from_pretrained(model_name)
-        tokenizer = AutoTokenizer.from_pretrained(model_name)
-        tokenizer.add_special_tokens({'pad_token': '[PAD]'})
-        model.resize_token_embeddings(len(tokenizer))
-    elif "T5" in model_name or "t5" in model_name:
-        print("Using T5 config")
-        model = AutoModelForSeq2SeqLM.from_pretrained(model_name)
-        tokenizer = AutoTokenizer.from_pretrained(model_name)
-    else:
-        print("Unsupported model")
-        return
-
-    # Ensure padding token is set
-    tokenizer.add_special_tokens({'pad_token': '[PAD]'})
-    model.resize_token_embeddings(len(tokenizer))
+    model, tokenizer = get_model(model_name)
 
     # Load the dataset
     data_df = pd.read_csv(data_path)

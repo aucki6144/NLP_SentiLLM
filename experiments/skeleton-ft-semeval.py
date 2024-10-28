@@ -18,7 +18,7 @@ import os
 # This line is for adding packages in the root dir into syspath
 sys.path.append(os.path.split(sys.path[0])[0])
 
-from utils.prompt_helper import get_prompt_label_template
+from utils import get_prompt_label_template, get_model_train
 
 
 def main(args):
@@ -27,33 +27,7 @@ def main(args):
     torch.manual_seed(args.seed)
 
     # Load pretrained model and tokenizer
-    if "Llama" in model_name:
-        print("Using Llama config")
-        model = AutoModelForCausalLM.from_pretrained(model_name)
-        tokenizer = AutoTokenizer.from_pretrained(model_name)
-        tokenizer.add_special_tokens({'pad_token': '<|finetune_right_pad_id|>'})
-        model.resize_token_embeddings(len(tokenizer))
-
-        layer_num = 0
-        for i, layer in enumerate(model.model.layers):
-            print(f"{i} = {layer}")
-            layer_num += 1
-
-        for i, layer in enumerate(model.model.layers):
-            if i < args.freeze_layer:
-                for param in layer.parameters():
-                    param.requires_grad = False
-
-        print(
-            f"Froze the first {args.freeze_layer} layers, only the last {layer_num - args.freeze_layer} layers will be fine-tuned.")
-
-    elif "T5" in model_name or "t5" in model_name:
-        print("Using T5 config")
-        model = AutoModelForSeq2SeqLM.from_pretrained(model_name)
-        tokenizer = AutoTokenizer.from_pretrained(model_name)
-    else:
-        print("Unsupported model")
-        return
+    model, tokenizer = get_model_train(model_name, args.freeze_layer)
 
     class CustomSeq2SeqTrainer(Seq2SeqTrainer):
         def compute_loss(self, model, inputs, return_outputs=False):
@@ -133,11 +107,11 @@ def main(args):
         output_dir="./results",
         evaluation_strategy="epoch",
         learning_rate=5e-5,
-        per_device_train_batch_size=2,  # Due to limited resources
-        per_device_eval_batch_size=2,
+        per_device_train_batch_size=args.batch_size,  # Due to limited resources
+        per_device_eval_batch_size=args.batch_size,
         weight_decay=0.01,
         save_strategy="no",
-        num_train_epochs=2,
+        num_train_epochs=args.epoch,
         fp16=True,  # Enable mixed precision if using GPU
     )
 
@@ -238,6 +212,15 @@ if __name__ == '__main__':
         type=int,
         required=False,
         default=0,
+        help='Freeze the first n layers',
+    )
+
+    parser.add_argument(
+        '--epoch',
+        '-e',
+        type=int,
+        required=False,
+        default=2,
         help='Freeze the first n layers',
     )
 
