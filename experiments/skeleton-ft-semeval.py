@@ -7,6 +7,8 @@ import pandas as pd
 import datasets
 import torch
 
+from torch.nn import functional as F
+
 from datasets import load_dataset
 from transformers import AutoModelForCausalLM, AutoTokenizer, Seq2SeqTrainer, Seq2SeqTrainingArguments, \
     DataCollatorWithPadding, DataCollatorForSeq2Seq, AutoModelForSeq2SeqLM
@@ -29,7 +31,7 @@ def main(args):
         print("Using Llama config")
         model = AutoModelForCausalLM.from_pretrained(model_name)
         tokenizer = AutoTokenizer.from_pretrained(model_name)
-        tokenizer.add_special_tokens({'pad_token': '[PAD]'})
+        tokenizer.add_special_tokens({'pad_token': '<|finetune_right_pad_id|>'})
         model.resize_token_embeddings(len(tokenizer))
 
         layer_num = 0
@@ -52,6 +54,31 @@ def main(args):
     else:
         print("Unsupported model")
         return
+
+    class CustomSeq2SeqTrainer(Seq2SeqTrainer):
+        def compute_loss(self, model, inputs, return_outputs=False):
+            labels = inputs.get('labels')
+            attention_mask = inputs.get('attention_mask')
+
+            # Forward pass
+            outputs = model(**inputs)
+            logits = outputs.get('logits')
+
+            # Reshape logits and labels to (batch_size, seq_length, vocab_size)
+            logits = logits.view(labels.size(0), -1, logits.size(-1))
+            labels = labels.view(labels.size(0), -1)
+
+            # Compute CrossEntropyLoss with reduction='none'
+            loss_fct = torch.nn.CrossEntropyLoss(reduction='none', ignore_index=tokenizer.pad_token_id)
+            loss = loss_fct(logits.permute(0, 2, 1), labels)
+
+            # Apply attention_mask to ignore padding tokens in the loss calculation
+            loss = loss * attention_mask
+
+            # Compute weighted average loss
+            weighted_loss = loss.sum() / attention_mask.sum()
+
+            return (weighted_loss, outputs) if return_outputs else weighted_loss
 
     data_df = pd.read_csv(data_path)
 
@@ -117,7 +144,7 @@ def main(args):
     data_collator = DataCollatorWithPadding(tokenizer=tokenizer)
 
     # Define Trainer object
-    trainer = Seq2SeqTrainer(
+    trainer = CustomSeq2SeqTrainer(
         model=model,
         args=training_args,
         train_dataset=train_set,
