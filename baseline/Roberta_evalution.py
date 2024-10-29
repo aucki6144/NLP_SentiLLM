@@ -8,7 +8,7 @@ import datasets
 import pandas as pd
 from transformers import RobertaTokenizer, RobertaForSequenceClassification
 import torch
-from sklearn.metrics import precision_recall_fscore_support, confusion_matrix
+from sklearn.metrics import precision_recall_fscore_support, hamming_loss
 from torch.utils.data import DataLoader
 import numpy as np
 def evalution(args):
@@ -60,6 +60,8 @@ def evalution(args):
 
     #metrics evalution
     precision, recall, f1, _ = precision_recall_fscore_support(y_true, y_pred, average='micro', zero_division=1)
+    accuracy = 1 - hamming_loss(y_true, y_pred)
+    print(f"Accuracy: {accuracy}")
     print(f"Precision: {precision}")
     print(f"Recall: {recall}")
     print(f"F1 Score: {f1}")
