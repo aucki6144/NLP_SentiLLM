@@ -22,7 +22,7 @@ def infer(args):
     max_seq_length = args.max_seq_length
 
     model, tokenizer = FastLanguageModel.from_pretrained(
-        model_name="lora_model",  # YOUR MODEL YOU USED FOR TRAINING
+        model_name=args.model_name,  # YOUR MODEL YOU USED FOR TRAINING
         max_seq_length=max_seq_length,
         dtype=None,
         load_in_4bit=args.load_in_4bit,
