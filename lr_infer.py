@@ -14,6 +14,9 @@ import pandas as pd
 sys.path.append(os.path.split(sys.path[0])[0])
 
 from unsloth import FastLanguageModel, get_chat_template
+from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score
+from sklearn.preprocessing import MultiLabelBinarizer
+from tqdm import tqdm
 
 prompt_base = "Classify the emotion in the sentence:"
 
@@ -37,7 +40,18 @@ def infer(args):
     # Load data
     df = pd.read_csv(args.data_set)
 
-    for idx, row in df.iterrows():
+    true_labels = df[['Anger', 'Fear', 'Joy', 'Sadness', 'Surprise']].values.tolist()
+    # Prepare to collect predictions
+    predicted_outputs = []
+
+    total_samples = len(true_labels)
+    true_positive = [0] * 5  # For each emotion: Anger, Fear, Joy, Sadness, Surprise
+    false_positive = [0] * 5
+    false_negative = [0] * 5
+
+    emotion_list = ['Anger', 'Fear', 'Joy', 'Sadness', 'Surprise']
+
+    for idx, row in tqdm(df.iterrows(), total=df.shape[0], desc="Processing"):
         sentence = row['text']
 
         # Prepare messages for input
@@ -69,9 +83,63 @@ def infer(args):
 
         if output_text:
             real_output = output_text.group(1).strip()
-            print(f"Input: {sentence}\nPredicted Emotions: {real_output}\n")
+            predicted_emotions = [emotion.strip() for emotion in real_output.split(',') if emotion.strip()]
         else:
-            print(f"Input: {sentence}\nNo assistant response found.\n")
+            predicted_emotions = []
+
+        predicted_outputs.append(predicted_emotions)
+
+        # Update true positive, false positive, false negative counts
+        for i, emotion in enumerate(emotion_list):
+            if emotion in predicted_emotions and true_labels[idx][i] == 1:
+                true_positive[i] += 1
+            elif emotion in predicted_emotions and true_labels[idx][i] == 0:
+                false_positive[i] += 1
+            elif emotion not in predicted_emotions and true_labels[idx][i] == 1:
+                false_negative[i] += 1
+
+        if args.show_infer:
+            print(f"Input: {sentence}\nPredicted Emotions: {predicted_emotions}\n")
+
+    precision_list = []
+    recall_list = []
+    f1_list = []
+
+    total_true_positives = sum(true_positive)
+    total_false_positives = sum(false_positive)
+    total_false_negatives = sum(false_negative)
+
+    # Calculate precision, recall, and F1 score for each emotion
+    for i, emotion in enumerate(emotion_list):
+        precision = true_positive[i] / (true_positive[i] + false_positive[i]) if (true_positive[i] + false_positive[
+            i]) > 0 else 0
+        recall = true_positive[i] / (true_positive[i] + false_negative[i]) if (true_positive[i] + false_negative[
+            i]) > 0 else 0
+        f1 = (2 * precision * recall) / (precision + recall) if (precision + recall) > 0 else 0
+
+        precision_list.append(precision)
+        recall_list.append(recall)
+        f1_list.append(f1)
+
+    # Calculate overall metrics
+    accuracy = total_true_positives / (total_samples * len(emotion_list))
+    overall_precision = sum(precision_list) / len(emotion_list)
+    overall_recall = sum(recall_list) / len(emotion_list)
+    overall_f1 = sum(f1_list) / len(emotion_list)
+
+    # Display the results
+    print(f"\nOverall Metrics:")
+    print(f"Accuracy: {accuracy:.4f}")
+    print(f"Precision: {overall_precision:.4f}")
+    print(f"Recall: {overall_recall:.4f}")
+    print(f"F1 Score: {overall_f1:.4f}")
+
+    # Display metrics for each emotion
+    for i, emotion in enumerate(emotion_list):
+        print(f"\nMetrics for {emotion}:")
+        print(f"  Precision: {precision_list[i]:.4f}")
+        print(f"  Recall: {recall_list[i]:.4f}")
+        print(f"  F1 Score: {f1_list[i]:.4f}")
 
 
 if __name__ == '__main__':
@@ -104,6 +172,7 @@ if __name__ == '__main__':
     parser.add_argument('--max_seq_length', type=int, required=False, default=512)
     parser.add_argument('--load_in_4bit', type=bool, required=False, default=True,
                         help='Use 4bit quantization to reduce memory usage. Can be False')
+    parser.add_argument('--show_infer', type=bool, required=False, default=False)
 
     args = parser.parse_args()
     infer(args)
