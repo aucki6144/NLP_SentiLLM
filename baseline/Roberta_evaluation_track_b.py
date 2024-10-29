@@ -100,7 +100,8 @@ def main(args):
         # Prepare evaluation dataset for the current emotion
 
         # Evaluate and collect metrics
-        re, labels, preds = evaluate_emotion_model_track_b(device, model_name, df, emotion, args)
+        model_path = os.path.join(model_name, emotion)
+        re, labels, preds = evaluate_emotion_model_track_b(device, model_path, df, emotion, args)
         final_result += re
         # Append results to total lists
         all_labels.extend(labels)
@@ -113,8 +114,7 @@ def main(args):
 
     print(final_result, end='')
     print("\nOverall Metrics:")
-    print(
-        f"Accuracy: {overall_accuracy:.4f}, Precision: {overall_precision:.4f}, Recall: {overall_recall:.4f}, F1: {overall_f1:.4f}")
+    print(f"Accuracy: {overall_accuracy:.4f}, Precision: {overall_precision:.4f}, Recall: {overall_recall:.4f}, F1: {overall_f1:.4f}")
 
 
 if __name__ == '__main__':
@@ -125,7 +125,7 @@ if __name__ == '__main__':
         '-m',
         type=str,
         required=False,
-        default='./home/checkpoints_hf/bert-base-uncased-hf',
+        default='./home/output/twitter-roberta-base-emotion',
         help='Path or name to pre-trained model',
     )
 
@@ -134,7 +134,7 @@ if __name__ == '__main__':
         '-d',
         type=str,
         required=False,
-        default=r'D:\学习\BDT\MSBD5018-NLP\Project\public_data\train\track_beng.csv',
+        default='./home/data/public_data/train/track_b/eng.csv',
         help='Path to fine-tune dataset',
     )
 
@@ -161,7 +161,7 @@ if __name__ == '__main__':
         '-b',
         type=int,
         required=False,
-        default=1,
+        default=8,
         help='Batch size for training',
     )
 
