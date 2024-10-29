@@ -74,7 +74,8 @@ def infer(args):
             re.DOTALL,
         )
 
-        print(output_text)
+        real_output = output_text.group(1).strip()
+        print(real_output)
 
 
 if __name__ == '__main__':
