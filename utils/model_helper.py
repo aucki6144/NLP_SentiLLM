@@ -18,6 +18,10 @@ def get_model(model_name):
         print("Using T5 config")
         model = AutoModelForSeq2SeqLM.from_pretrained(model_name)
         tokenizer = AutoTokenizer.from_pretrained(model_name)
+    elif "bart" in model_name:
+        print("Using bart config")
+        model = AutoModelForSeq2SeqLM.from_pretrained(model_name)
+        tokenizer = AutoTokenizer.from_pretrained(model_name)
     else:
         print("Unsupported model")
         return
