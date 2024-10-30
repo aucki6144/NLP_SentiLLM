@@ -85,29 +85,19 @@ def evaluate_multi_emotion_model(device, model_name, df, args):
 
     # Calculate metrics for the current emotion
     precision, recall, f1, _ = precision_recall_fscore_support([i[0] for i in labels], [i[0] for i in preds], average='binary')
-    acc = accuracy_score(labels, preds)
-    print(f"Anger - Accuracy: {acc:.4f}, Precision: {precision:.4f}, Recall: {recall:.4f}, F1: {f1:.4f}")
-    result = f"Anger - Accuracy: {acc:.4f}, Precision: {precision:.4f}, Recall: {recall:.4f}, F1: {f1:.4f}\n"
+    result = f"Anger - Precision: {precision:.4f}, Recall: {recall:.4f}, F1: {f1:.4f}\n"
 
     precision, recall, f1, _ = precision_recall_fscore_support([i[1] for i in labels], [i[1] for i in preds], average='binary')
-    acc = accuracy_score(labels, preds)
-    print(f"Fear - Accuracy: {acc:.4f}, Precision: {precision:.4f}, Recall: {recall:.4f}, F1: {f1:.4f}")
-    result += f"Fear - Accuracy: {acc:.4f}, Precision: {precision:.4f}, Recall: {recall:.4f}, F1: {f1:.4f}\n"
+    result += f"Fear - Precision: {precision:.4f}, Recall: {recall:.4f}, F1: {f1:.4f}\n"
 
     precision, recall, f1, _ = precision_recall_fscore_support([i[2] for i in labels], [i[2] for i in preds], average='binary')
-    acc = accuracy_score(labels, preds)
-    print(f"Joy - Accuracy: {acc:.4f}, Precision: {precision:.4f}, Recall: {recall:.4f}, F1: {f1:.4f}")
-    result += f"Joy - Accuracy: {acc:.4f}, Precision: {precision:.4f}, Recall: {recall:.4f}, F1: {f1:.4f}\n"
+    result += f"Joy - Precision: {precision:.4f}, Recall: {recall:.4f}, F1: {f1:.4f}\n"
 
     precision, recall, f1, _ = precision_recall_fscore_support([i[3] for i in labels], [i[3] for i in preds], average='binary')
-    acc = accuracy_score(labels, preds)
-    print(f"Sadness - Accuracy: {acc:.4f}, Precision: {precision:.4f}, Recall: {recall:.4f}, F1: {f1:.4f}")
-    result += f"Sadness - Accuracy: {acc:.4f}, Precision: {precision:.4f}, Recall: {recall:.4f}, F1: {f1:.4f}\n"
+    result += f"Sadness - Precision: {precision:.4f}, Recall: {recall:.4f}, F1: {f1:.4f}\n"
 
     precision, recall, f1, _ = precision_recall_fscore_support([i[4] for i in labels], [i[4] for i in preds], average='binary')
-    acc = accuracy_score(labels, preds)
-    print(f"Surprise - Accuracy: {acc:.4f}, Precision: {precision:.4f}, Recall: {recall:.4f}, F1: {f1:.4f}")
-    result += f"Surprise - Accuracy: {acc:.4f}, Precision: {precision:.4f}, Recall: {recall:.4f}, F1: {f1:.4f}\n"
+    result += f"Surprise - Precision: {precision:.4f}, Recall: {recall:.4f}, F1: {f1:.4f}\n"
 
     return result, labels, preds
 
@@ -126,15 +116,10 @@ def main(args):
     # Evaluate and collect metrics
     final_result, labels, preds = evaluate_multi_emotion_model(device, model_name, df, args)
 
-    # Append results to total lists
-    for j in range(4):
-        all_labels.extend([i[j] for i in labels])
-        all_preds.extend([i[j] for i in preds])
-
     # Calculate overall metrics
-    overall_precision, overall_recall, overall_f1, _ = precision_recall_fscore_support(all_labels, all_preds,
-                                                                                       average='binary')
-    overall_accuracy = accuracy_score(all_labels, all_preds)
+    overall_precision, overall_recall, overall_f1, _ = precision_recall_fscore_support(labels, preds,
+                                                                                       average='micro')
+    overall_accuracy = accuracy_score(labels, preds)
 
     print(final_result, end='')
     print("\nOverall Metrics:")
