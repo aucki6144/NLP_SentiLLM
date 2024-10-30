@@ -7,8 +7,6 @@ import argparse
 import os
 import sys
 
-from pyarrow.lib import StringBuilder
-
 # This line is for adding packages in the root dir into syspath
 sys.path.append(os.path.split(sys.path[0])[0])
 
@@ -16,8 +14,9 @@ import pandas as pd
 import torch
 from tqdm import tqdm
 from sklearn.metrics import precision_recall_fscore_support, accuracy_score
-from transformers import BertTokenizer, BertForSequenceClassification, Trainer, TrainingArguments, get_scheduler
-from torch.utils.data import Dataset, random_split, DataLoader
+from transformers import BertTokenizer, BertForSequenceClassification, RobertaForSequenceClassification, \
+    RobertaTokenizer
+from torch.utils.data import Dataset, DataLoader
 
 emotions = ['Anger', 'Fear', 'Joy', 'Sadness', 'Surprise']
 
@@ -64,9 +63,9 @@ def evaluate_emotion_model(device, model_name, df, emotion, args):
     print(f"Evaluating model for {emotion}...")
 
     # Load the trained model
-    model = BertForSequenceClassification.from_pretrained(os.path.join(model_name, emotion))
+    model = RobertaForSequenceClassification.from_pretrained(os.path.join(model_name, emotion))
     model.to(device)
-    tokenizer = BertTokenizer.from_pretrained(os.path.join(model_name, emotion))
+    tokenizer = RobertaTokenizer.from_pretrained(os.path.join(model_name, emotion))
     model.eval()
 
     # Prepare data
@@ -143,7 +142,7 @@ if __name__ == '__main__':
         '-m',
         type=str,
         required=False,
-        default='./home/checkpoints_hf/bert-base-uncased-hf',
+        default='FacebookAI/roberta-base',
         help='Path or name to pre-trained model',
     )
 
