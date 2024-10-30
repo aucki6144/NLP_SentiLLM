@@ -10,6 +10,7 @@ import os
 import sys
 
 import pandas as pd
+from sympy import Integer
 
 sys.path.append(os.path.split(sys.path[0])[0])
 
@@ -43,9 +44,13 @@ def infer(args):
     # Load data
     df = pd.read_csv(args.data_set)
 
+    TP, TN, FP, FN = 0, 0, 0, 0
+    distance = 0
+
     # for idx, row in tqdm(df.iterrows(), total=df.shape[0], desc="Processing"):
     for idx, row in df.iterrows():
         sentence = row['text']
+        real_emotion = [row['Anger'], row['Fear'], row['Joy'], row['Sadness'], row['Surprise']]
 
         # Prepare messages for input
         messages = [
@@ -75,7 +80,47 @@ def infer(args):
         )
 
         real_output = output_text.group(1).strip()
-        print(real_output)
+
+        # Evaluation
+        emotions_intensity = []
+        emotions_output = real_output.split(',')
+
+        for emotion_output in emotions_output:
+            emotions_intensity.append(int(emotion_output.strip().split("=")[-1]))
+
+        if len(emotions_intensity) != len(real_emotion):
+            print(f"Wrong format generated: {real_output}")
+
+        for label, output in zip(real_emotion, emotions_intensity):
+            if output == label:
+                if output == 0:
+                    TN += 1
+                else:
+                    TP += 1
+            else:
+                if output == 0:
+                    FN += 1
+                else:
+                    FP += 1
+            distance += abs(output - label)
+
+        if args.show_infer:
+            print(real_output)
+
+    # Calculate overall metrics
+    accuracy = (TP + TN) / (TP + TN + FP + FN)
+    overall_precision = TP / (TP + FP)
+    overall_recall = TP / (TP + FN)
+    overall_f1 = (2 * overall_precision * overall_recall) / (overall_precision + overall_recall)
+    avg_distance = distance / (len(df) * 5)
+
+    # Display the results
+    print(f"\nOverall Metrics:")
+    print(f"Accuracy: {accuracy:.4f}")
+    print(f"Precision: {overall_precision:.4f}")
+    print(f"Recall: {overall_recall:.4f}")
+    print(f"F1 Score: {overall_f1:.4f}")
+    print(f"Avg Distance: {avg_distance:.4f}")
 
 
 if __name__ == '__main__':

@@ -48,6 +48,7 @@ def infer(args):
     true_positive = [0] * 5  # For each emotion: Anger, Fear, Joy, Sadness, Surprise
     false_positive = [0] * 5
     false_negative = [0] * 5
+    true_negative = [0] * 5
 
     emotion_list = ['Anger', 'Fear', 'Joy', 'Sadness', 'Surprise']
 
@@ -97,6 +98,8 @@ def infer(args):
                 false_positive[i] += 1
             elif emotion not in predicted_emotions and true_labels[idx][i] == 1:
                 false_negative[i] += 1
+            else:
+                true_negative[i] += 1
 
         if args.show_infer:
             print(f"Input: {sentence}\nPredicted Emotions: {predicted_emotions}\n")
@@ -105,9 +108,10 @@ def infer(args):
     recall_list = []
     f1_list = []
 
-    total_true_positives = sum(true_positive)
-    total_false_positives = sum(false_positive)
-    total_false_negatives = sum(false_negative)
+    TP = sum(true_positive)
+    FP = sum(false_positive)
+    FN = sum(false_negative)
+    TN = sum(true_negative)
 
     # Calculate precision, recall, and F1 score for each emotion
     for i, emotion in enumerate(emotion_list):
@@ -122,10 +126,10 @@ def infer(args):
         f1_list.append(f1)
 
     # Calculate overall metrics
-    accuracy = total_true_positives / (total_samples * len(emotion_list))
-    overall_precision = sum(precision_list) / len(emotion_list)
-    overall_recall = sum(recall_list) / len(emotion_list)
-    overall_f1 = sum(f1_list) / len(emotion_list)
+    accuracy = (TP + TN) / (TP + TN + FP + FN)
+    overall_precision = TP / (TP + FP)
+    overall_recall = TP / (TP + FN)
+    overall_f1 = (2 * overall_precision * overall_recall) / (overall_precision + overall_recall)
 
     # Display the results
     print(f"\nOverall Metrics:")
