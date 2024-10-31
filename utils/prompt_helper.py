@@ -7,7 +7,7 @@ import os
 import string
 import json
 
-TEMPLATE_PATH = "./home/template/template.json"
+TEMPLATE_PATH = "./experiments/home/template/template.json"
 
 
 def get_prompt_label_template(index=0):
