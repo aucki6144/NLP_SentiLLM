@@ -7,6 +7,8 @@ import pandas as pd
 import datasets
 import torch
 
+from torch.nn import functional as F
+
 from datasets import load_dataset
 from transformers import AutoModelForCausalLM, AutoTokenizer, Seq2SeqTrainer, Seq2SeqTrainingArguments, \
     DataCollatorWithPadding, DataCollatorForSeq2Seq, AutoModelForSeq2SeqLM
@@ -16,7 +18,7 @@ import os
 # This line is for adding packages in the root dir into syspath
 sys.path.append(os.path.split(sys.path[0])[0])
 
-from utils.prompt_helper import get_prompt_label_template
+from utils import get_prompt_label_template, get_model_train
 
 
 def main(args):
@@ -25,19 +27,32 @@ def main(args):
     torch.manual_seed(args.seed)
 
     # Load pretrained model and tokenizer
-    if "Llama" in model_name:
-        print("Using Llama config")
-        model = AutoModelForCausalLM.from_pretrained(model_name)
-        tokenizer = AutoTokenizer.from_pretrained(model_name)
-        tokenizer.add_special_tokens({'pad_token': '[PAD]'})
-        model.resize_token_embeddings(len(tokenizer))
-    elif "T5" in model_name:
-        print("Using T5 config")
-        model = AutoModelForSeq2SeqLM.from_pretrained(model_name)
-        tokenizer = AutoTokenizer.from_pretrained(model_name)
-    else:
-        print("Unsupported model")
-        return
+    model, tokenizer = get_model_train(model_name, args.freeze_layer)
+
+    class CustomSeq2SeqTrainer(Seq2SeqTrainer):
+        def compute_loss(self, model, inputs, return_outputs=False):
+            labels = inputs.get('labels')
+            attention_mask = inputs.get('attention_mask')
+
+            # Forward pass
+            outputs = model(**inputs)
+            logits = outputs.get('logits')
+
+            # Reshape logits and labels to (batch_size, seq_length, vocab_size)
+            logits = logits.view(labels.size(0), -1, logits.size(-1))
+            labels = labels.view(labels.size(0), -1)
+
+            # Compute CrossEntropyLoss with reduction='none'
+            loss_fct = torch.nn.CrossEntropyLoss(reduction='none', ignore_index=tokenizer.pad_token_id)
+            loss = loss_fct(logits.permute(0, 2, 1), labels)
+
+            # Apply attention_mask to ignore padding tokens in the loss calculation
+            loss = loss * attention_mask
+
+            # Compute weighted average loss
+            weighted_loss = loss.sum() / attention_mask.sum()
+
+            return (weighted_loss, outputs) if return_outputs else weighted_loss
 
     data_df = pd.read_csv(data_path)
 
@@ -52,15 +67,20 @@ def main(args):
     def row_process(row):
         raw_text = row['text']
         text = prompt_template.safe_substitute({'sentence': raw_text})
-        labels = label_template.safe_substitute({
-            'Anger': row['Anger'],
-            'Fear': row['Fear'],
-            'Joy': row['Joy'],
-            'Sadness': row['Sadness'],
-            'Surprise': row['Surprise'],
-        })
+        labels = []
+        if row['Anger'] == 1:
+            labels.append('Anger')
+        if row['Fear'] == 1:
+            labels.append('Fear')
+        if row['Joy'] == 1:
+            labels.append('Joy')
+        if row['Sadness'] == 1:
+            labels.append('Sadness')
+        if row['Surprise'] == 1:
+            labels.append('Surprise')
 
-        return {'text': text, 'labels': labels}
+        label_str = ", ".join(labels)
+        return {'text': text, 'labels': label_str}
 
     formatted_data = data_df.apply(row_process, axis=1).tolist()
 
@@ -87,18 +107,18 @@ def main(args):
         output_dir="./results",
         evaluation_strategy="epoch",
         learning_rate=5e-5,
-        per_device_train_batch_size=2,  # Due to limited resources
-        per_device_eval_batch_size=2,
+        per_device_train_batch_size=args.batch_size,  # Due to limited resources
+        per_device_eval_batch_size=args.batch_size,
         weight_decay=0.01,
         save_strategy="no",
-        num_train_epochs=2,
+        num_train_epochs=args.epoch,
         fp16=True,  # Enable mixed precision if using GPU
     )
 
     data_collator = DataCollatorWithPadding(tokenizer=tokenizer)
 
     # Define Trainer object
-    trainer = Seq2SeqTrainer(
+    trainer = CustomSeq2SeqTrainer(
         model=model,
         args=training_args,
         train_dataset=train_set,
@@ -127,7 +147,7 @@ if __name__ == '__main__':
         '-m',
         type=str,
         required=False,
-        default='./home/checkpoints_hf/T5-small-hf',
+        default='./home/checkpoints_hf/Llama-3.2-1B-hf',
         help='Path or name to pre-trained model',
     )
 
@@ -184,6 +204,24 @@ if __name__ == '__main__':
         required=False,
         default=0,
         help='Index for prompt-label template pair',
+    )
+
+    parser.add_argument(
+        '--freeze_layer',
+        '-f',
+        type=int,
+        required=False,
+        default=0,
+        help='Freeze the first n layers',
+    )
+
+    parser.add_argument(
+        '--epoch',
+        '-e',
+        type=int,
+        required=False,
+        default=2,
+        help='Freeze the first n layers',
     )
 
     config_args = parser.parse_args()
